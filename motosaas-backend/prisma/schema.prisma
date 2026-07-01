@@ -1,0 +1,316 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ASSOCIATION_ADMIN
+  DRIVER
+  CUSTOMER
+}
+
+enum RecordStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  DELETED
+  PENDING
+}
+
+enum DriverAvailability {
+  AVAILABLE
+  BUSY
+  OFFLINE
+}
+
+enum TripStatus {
+  REQUESTED
+  ACCEPTED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
+}
+
+enum TripEvent {
+  REQUESTED
+  ACCEPTED
+  REJECTED
+  STARTED
+  FINISHED
+  CANCELED
+  LOCATION_UPDATED
+  STATUS_CHECKED
+  RATED
+}
+
+model Association {
+  id             String       @id @default(uuid())
+  association_id String       @unique @default(uuid())
+  name           String
+  slug           String       @unique
+  city           String
+  country        String       @default("BO")
+  timezone       String       @default("America/La_Paz")
+  status         RecordStatus @default(ACTIVE)
+  created_by     String?
+  created_at     DateTime     @default(now())
+  updated_by     String?
+  updated_at     DateTime     @updatedAt
+
+  users           User[]
+  driver_profiles DriverProfile[]
+  vehicles        Vehicle[]
+  fare_configs    FareConfig[]
+  coverage_zones  CoverageZone[]
+  trips           Trip[]
+  trip_history    TripHistory[]
+  ratings         Rating[]
+  audit_logs      AuditLog[]
+
+  @@index([association_id, status])
+  @@index([city, status])
+  @@map("associations")
+}
+
+model User {
+  id             String       @id @default(uuid())
+  association_id String
+  email          String
+  password_hash  String?
+  google_subject String?
+  full_name      String
+  phone          String?
+  role           UserRole
+  last_login_at  DateTime?
+  status         RecordStatus @default(ACTIVE)
+  created_by     String?
+  created_at     DateTime     @default(now())
+  updated_by     String?
+  updated_at     DateTime     @updatedAt
+
+  association       Association    @relation(fields: [association_id], references: [association_id])
+  driver_profile    DriverProfile?
+  vehicles          Vehicle[]
+  customer_trips    Trip[]         @relation("CustomerTrips")
+  driver_trips      Trip[]         @relation("DriverTrips")
+  ratings_given     Rating[]       @relation("RatingsGiven")
+  ratings_received  Rating[]       @relation("RatingsReceived")
+
+  @@unique([association_id, email])
+  @@unique([association_id, google_subject])
+  @@index([association_id, role, status])
+  @@map("users")
+}
+
+model DriverProfile {
+  id                    String             @id @default(uuid())
+  association_id        String
+  user_id               String             @unique
+  license_number        String?
+  current_latitude      Decimal?           @db.Decimal(10, 7)
+  current_longitude     Decimal?           @db.Decimal(10, 7)
+  last_location_at      DateTime?
+  availability_status   DriverAvailability @default(OFFLINE)
+  status                RecordStatus       @default(ACTIVE)
+  created_by            String?
+  created_at            DateTime           @default(now())
+  updated_by            String?
+  updated_at            DateTime           @updatedAt
+
+  association Association @relation(fields: [association_id], references: [association_id])
+  user        User        @relation(fields: [user_id], references: [id])
+
+  @@index([association_id, availability_status, status])
+  @@map("driver_profiles")
+}
+
+model Vehicle {
+  id             String       @id @default(uuid())
+  association_id String
+  driver_user_id String
+  plate          String
+  brand          String?
+  model          String?
+  color          String?
+  year           Int?
+  status         RecordStatus @default(ACTIVE)
+  created_by     String?
+  created_at     DateTime     @default(now())
+  updated_by     String?
+  updated_at     DateTime     @updatedAt
+
+  association Association @relation(fields: [association_id], references: [association_id])
+  driver      User        @relation(fields: [driver_user_id], references: [id])
+  trips       Trip[]
+
+  @@unique([association_id, plate])
+  @@index([association_id, driver_user_id, status])
+  @@map("vehicles")
+}
+
+model FareConfig {
+  id                              String       @id @default(uuid())
+  association_id                  String
+  name                            String       @default("Tarifa principal")
+  base_fare                       Decimal      @db.Decimal(10, 2)
+  minimum_fare                    Decimal      @db.Decimal(10, 2)
+  per_kilometer_fare              Decimal      @db.Decimal(10, 2)
+  night_surcharge                 Decimal      @db.Decimal(10, 2)
+  waiting_per_minute_fare         Decimal      @db.Decimal(10, 2)
+  association_commission_percent  Decimal      @db.Decimal(5, 2)
+  platform_commission_percent     Decimal      @db.Decimal(5, 2)
+  night_start_hour                Int          @default(22)
+  night_end_hour                  Int          @default(6)
+  status                          RecordStatus @default(ACTIVE)
+  created_by                      String?
+  created_at                      DateTime     @default(now())
+  updated_by                      String?
+  updated_at                      DateTime     @updatedAt
+
+  association Association @relation(fields: [association_id], references: [association_id])
+
+  @@index([association_id, status])
+  @@map("fare_configs")
+}
+
+model CoverageZone {
+  id               String       @id @default(uuid())
+  association_id   String
+  name             String
+  description      String?
+  center_latitude  Decimal?     @db.Decimal(10, 7)
+  center_longitude Decimal?     @db.Decimal(10, 7)
+  radius_km        Decimal?     @db.Decimal(10, 2)
+  polygon          Json?
+  status           RecordStatus @default(ACTIVE)
+  created_by       String?
+  created_at       DateTime     @default(now())
+  updated_by       String?
+  updated_at       DateTime     @updatedAt
+
+  association Association @relation(fields: [association_id], references: [association_id])
+  trips       Trip[]
+
+  @@index([association_id, status])
+  @@map("coverage_zones")
+}
+
+model Trip {
+  id                         String     @id @default(uuid())
+  association_id             String
+  customer_user_id           String
+  driver_user_id             String?
+  vehicle_id                 String?
+  coverage_zone_id           String?
+  origin_address             String?
+  origin_latitude            Decimal    @db.Decimal(10, 7)
+  origin_longitude           Decimal    @db.Decimal(10, 7)
+  destination_address        String?
+  destination_latitude       Decimal    @db.Decimal(10, 7)
+  destination_longitude      Decimal    @db.Decimal(10, 7)
+  estimated_distance_km      Decimal    @db.Decimal(10, 2)
+  estimated_duration_minutes Int?
+  estimated_fare             Decimal    @db.Decimal(10, 2)
+  final_distance_km          Decimal?   @db.Decimal(10, 2)
+  waiting_minutes            Int        @default(0)
+  final_fare                 Decimal?   @db.Decimal(10, 2)
+  fare_breakdown             Json
+  status                     TripStatus @default(REQUESTED)
+  cancel_reason              String?
+  requested_at               DateTime   @default(now())
+  accepted_at                DateTime?
+  started_at                 DateTime?
+  completed_at               DateTime?
+  canceled_at                DateTime?
+  created_by                 String?
+  created_at                 DateTime   @default(now())
+  updated_by                 String?
+  updated_at                 DateTime   @updatedAt
+
+  association   Association   @relation(fields: [association_id], references: [association_id])
+  customer      User          @relation("CustomerTrips", fields: [customer_user_id], references: [id])
+  driver        User?         @relation("DriverTrips", fields: [driver_user_id], references: [id])
+  vehicle       Vehicle?      @relation(fields: [vehicle_id], references: [id])
+  coverage_zone CoverageZone? @relation(fields: [coverage_zone_id], references: [id])
+  history       TripHistory[]
+  ratings       Rating[]
+
+  @@index([association_id, status, requested_at])
+  @@index([association_id, customer_user_id, requested_at])
+  @@index([association_id, driver_user_id, requested_at])
+  @@map("trips")
+}
+
+model TripHistory {
+  id             String     @id @default(uuid())
+  association_id String
+  trip_id        String
+  actor_user_id  String?
+  event          TripEvent
+  from_status    TripStatus?
+  to_status      TripStatus?
+  metadata       Json?
+  status         RecordStatus @default(ACTIVE)
+  created_by     String?
+  created_at     DateTime   @default(now())
+  updated_by     String?
+  updated_at     DateTime   @updatedAt
+
+  association Association @relation(fields: [association_id], references: [association_id])
+  trip        Trip        @relation(fields: [trip_id], references: [id])
+
+  @@index([association_id, trip_id, created_at])
+  @@map("trip_history")
+}
+
+model Rating {
+  id             String       @id @default(uuid())
+  association_id String
+  trip_id        String
+  rater_user_id  String
+  rated_user_id  String
+  score          Int
+  comment        String?
+  status         RecordStatus @default(ACTIVE)
+  created_by     String?
+  created_at     DateTime     @default(now())
+  updated_by     String?
+  updated_at     DateTime     @updatedAt
+
+  association Association @relation(fields: [association_id], references: [association_id])
+  trip        Trip        @relation(fields: [trip_id], references: [id])
+  rater       User        @relation("RatingsGiven", fields: [rater_user_id], references: [id])
+  rated       User        @relation("RatingsReceived", fields: [rated_user_id], references: [id])
+
+  @@unique([association_id, trip_id, rater_user_id, rated_user_id])
+  @@index([association_id, rated_user_id, created_at])
+  @@map("ratings")
+}
+
+model AuditLog {
+  id             String       @id @default(uuid())
+  association_id String
+  actor_user_id  String?
+  action         String
+  entity         String
+  entity_id      String?
+  metadata       Json?
+  ip_address     String?
+  user_agent     String?
+  status         RecordStatus @default(ACTIVE)
+  created_by     String?
+  created_at     DateTime     @default(now())
+  updated_by     String?
+  updated_at     DateTime     @updatedAt
+
+  association Association @relation(fields: [association_id], references: [association_id])
+
+  @@index([association_id, action, created_at])
+  @@map("audit_logs")
+}

@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+npm-debug.log
+vendor/bundle/
+.bundle/
+android/.gradle/
+android/app/build/
+ios/Pods/
+ios/build/
+ios/.xcode.env.local
+*.keystore

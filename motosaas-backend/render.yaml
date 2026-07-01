@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: motosaas-backend
+    env: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm run prisma:deploy && npm run start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false

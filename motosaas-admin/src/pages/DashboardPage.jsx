@@ -39,7 +39,7 @@ export function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-4">
           <StatCard label="Asociaciones activas" value={data.associationsByStatus?.ACTIVE || 0} />
           <StatCard label="Asociaciones suspendidas" value={data.associationsByStatus?.SUSPENDED || 0} />
-          <StatCard label="Viajes completados" value={data.tripsByStatus?.COMPLETED || 0} />
+          <StatCard label="Viajes completados" value={data.tripsByStatus?.TRIP_FINISHED || 0} />
           <StatCard label="Facturacion bruta" value={`Bs ${data.totalCompletedFare || 0}`} />
         </div>
       </>

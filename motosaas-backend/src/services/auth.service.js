@@ -9,6 +9,14 @@ const { comparePassword, hashPassword } = require("../utils/password");
 const { signAccessToken } = require("../utils/jwt");
 const { serializeAssociation, serializeUser } = require("../utils/serializers");
 
+function fullNameFromPayload(payload) {
+  const firstName = String(payload.firstName || payload.first_name || "").trim();
+  const lastName = String(payload.lastName || payload.last_name || "").trim();
+  const fullName = String(payload.fullName || payload.full_name || "").trim();
+
+  return fullName || [firstName, lastName].filter(Boolean).join(" ").trim();
+}
+
 async function createSession(user, association) {
   await userRepository.updateLastLogin(user.id);
 
@@ -25,7 +33,9 @@ async function register(payload) {
   const associationSlug = String(payload.associationSlug || "").trim().toLowerCase();
   const email = String(payload.email || "").trim().toLowerCase();
   const password = String(payload.password || "");
-  const fullName = String(payload.fullName || payload.full_name || "").trim();
+  const fullName = fullNameFromPayload(payload);
+  const firstName = String(payload.firstName || payload.first_name || "").trim() || null;
+  const lastName = String(payload.lastName || payload.last_name || "").trim() || null;
   const phone = payload.phone ? String(payload.phone).trim() : null;
   const role = payload.role || Roles.CUSTOMER;
 
@@ -54,7 +64,11 @@ async function register(payload) {
       data: {
         association_id: association.association_id,
         email,
+        username: payload.username ? String(payload.username).trim().toLowerCase() : null,
         password_hash: passwordHash,
+        first_name: firstName,
+        last_name: lastName,
+        document_number: payload.documentNumber || payload.document_number || null,
         full_name: fullName,
         phone,
         role,
@@ -84,7 +98,7 @@ async function register(payload) {
 
 async function loginWithPassword(payload) {
   const associationSlug = String(payload.associationSlug || "").trim().toLowerCase();
-  const email = String(payload.email || "").trim().toLowerCase();
+  const email = String(payload.email || payload.username || "").trim().toLowerCase();
   const password = String(payload.password || "");
 
   if (!associationSlug || !email || !password) {
@@ -96,7 +110,7 @@ async function loginWithPassword(payload) {
     throw new ApiError(401, "Invalid credentials.");
   }
 
-  const user = await userRepository.findActiveByEmail(association.association_id, email);
+  const user = await userRepository.findActiveByEmailOrUsername(association.association_id, email);
   if (!user || !user.password_hash) {
     throw new ApiError(401, "Invalid credentials.");
   }
@@ -146,7 +160,27 @@ async function loginWithGoogle(payload) {
   return createSession(user, association);
 }
 
+async function requestPasswordRecovery(payload) {
+  const associationSlug = String(payload.associationSlug || "").trim().toLowerCase();
+  const email = String(payload.email || "").trim().toLowerCase();
+
+  if (!associationSlug || !email) {
+    throw new ApiError(400, "associationSlug and email are required.");
+  }
+
+  const association = await associationRepository.findActiveBySlug(associationSlug);
+
+  if (association) {
+    await userRepository.findActiveByEmail(association.association_id, email);
+  }
+
+  return {
+    message: "Si existe una cuenta con ese correo, se iniciara el proceso de recuperacion."
+  };
+}
+
 module.exports = {
+  requestPasswordRecovery,
   register,
   loginWithPassword,
   loginWithGoogle

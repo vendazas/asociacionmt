@@ -18,7 +18,7 @@ router.post(
   "/api/v1/vehicles",
   authenticate,
   authorize("ASSOCIATION_ADMIN", "SUPER_ADMIN"),
-  requireFields("driverUserId", "plate"),
+  requireFields("plate"),
   asyncHandler(vehicleController.createVehicle)
 );
 
@@ -35,6 +35,35 @@ router.put(
   authorize("DRIVER"),
   requireFields("plate"),
   asyncHandler(vehicleController.upsertMyVehicle)
+);
+
+router.get(
+  "/api/v1/vehicles/:vehicleId",
+  authenticate,
+  authorize("ASSOCIATION_ADMIN", "SUPER_ADMIN"),
+  asyncHandler(vehicleController.getVehicle)
+);
+
+router.put(
+  "/api/v1/vehicles/:vehicleId",
+  authenticate,
+  authorize("ASSOCIATION_ADMIN", "SUPER_ADMIN"),
+  asyncHandler(vehicleController.updateVehicle)
+);
+
+router.patch(
+  "/api/v1/vehicles/:vehicleId/status",
+  authenticate,
+  authorize("ASSOCIATION_ADMIN", "SUPER_ADMIN"),
+  requireFields("status"),
+  asyncHandler(vehicleController.updateVehicleStatus)
+);
+
+router.patch(
+  "/api/v1/vehicles/:vehicleId/assign",
+  authenticate,
+  authorize("ASSOCIATION_ADMIN", "SUPER_ADMIN"),
+  asyncHandler(vehicleController.assignVehicle)
 );
 
 module.exports = { vehicleRoutes: router };

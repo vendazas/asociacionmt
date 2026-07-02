@@ -5,7 +5,7 @@ import { Loader } from "../../components/Loader";
 import { PageHeader } from "../../components/PageHeader";
 
 export function TripsPage() {
-  const query = useQuery({ queryKey: ["trips-history"], queryFn: () => tripsApi.history({ limit: 100 }) });
+  const query = useQuery({ queryKey: ["admin-trips"], queryFn: () => tripsApi.adminList({ limit: 100 }) });
 
   if (query.isLoading) return <Loader />;
 

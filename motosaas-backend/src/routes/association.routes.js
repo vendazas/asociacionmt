@@ -21,6 +21,24 @@ router.post(
   requireFields("name", "slug", "city"),
   asyncHandler(associationController.createAssociation)
 );
+router.get(
+  "/api/v1/associations/:associationId",
+  authenticate,
+  authorize("SUPER_ADMIN"),
+  asyncHandler(associationController.getAssociationDetail)
+);
+router.put(
+  "/api/v1/associations/:associationId",
+  authenticate,
+  authorize("SUPER_ADMIN"),
+  asyncHandler(associationController.updateAssociation)
+);
+router.patch(
+  "/api/v1/associations/:associationId",
+  authenticate,
+  authorize("SUPER_ADMIN"),
+  asyncHandler(associationController.updateAssociation)
+);
 router.patch(
   "/api/v1/associations/:associationId/status",
   authenticate,

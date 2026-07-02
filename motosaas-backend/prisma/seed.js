@@ -8,6 +8,8 @@ async function main() {
   const slug = process.env.SEED_ASSOCIATION_SLUG || "platform";
   const email = process.env.SEED_ADMIN_EMAIL || "admin@motosaas.local";
   const password = process.env.SEED_ADMIN_PASSWORD || "ChangeMe123!";
+  const mobileEmail = process.env.SEED_MOBILE_USER_EMAIL || "mobile@motosaas.local";
+  const mobilePassword = process.env.SEED_MOBILE_USER_PASSWORD || "ChangeMe123!";
 
   const association = await prisma.association.upsert({
     where: { slug },
@@ -51,6 +53,31 @@ async function main() {
     }
   });
 
+  await prisma.user.upsert({
+    where: {
+      association_id_email: {
+        association_id: association.association_id,
+        email: mobileEmail
+      }
+    },
+    update: {
+      password_hash: await bcrypt.hash(mobilePassword, 12),
+      role: UserRole.ASSOCIATION_ADMIN,
+      status: RecordStatus.ACTIVE,
+      updated_by: "seed"
+    },
+    create: {
+      association_id: association.association_id,
+      email: mobileEmail,
+      password_hash: await bcrypt.hash(mobilePassword, 12),
+      full_name: "Mobile Test User",
+      role: UserRole.ASSOCIATION_ADMIN,
+      status: RecordStatus.ACTIVE,
+      created_by: "seed",
+      updated_by: "seed"
+    }
+  });
+
   await prisma.fareConfig.upsert({
     where: { id: `${association.association_id}-default-fare` },
     update: {},
@@ -65,12 +92,13 @@ async function main() {
       waiting_per_minute_fare: 0.5,
       association_commission_percent: 8,
       platform_commission_percent: 5,
+      max_driver_search_radius_km: 5,
       created_by: "seed",
       updated_by: "seed"
     }
   });
 
-  console.log(`Seed ready: ${slug} / ${email}`);
+  console.log(`Seed ready: ${slug} / ${email} / ${mobileEmail}`);
 }
 
 main()

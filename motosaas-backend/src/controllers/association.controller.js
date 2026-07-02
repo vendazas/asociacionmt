@@ -10,9 +10,19 @@ async function listAssociations(req, res) {
   res.status(200).json({ data });
 }
 
+async function getAssociationDetail(req, res) {
+  const data = await associationService.getAssociationDetail(req.params.associationId);
+  res.status(200).json({ data });
+}
+
 async function createAssociation(req, res) {
   const data = await associationService.createAssociation(req.user, req.body);
   res.status(201).json({ data });
+}
+
+async function updateAssociation(req, res) {
+  const data = await associationService.updateAssociation(req.user, req.params.associationId, req.body);
+  res.status(200).json({ data });
 }
 
 async function updateAssociationStatus(req, res) {
@@ -26,7 +36,9 @@ async function updateAssociationStatus(req, res) {
 
 module.exports = {
   createAssociation,
+  getAssociationDetail,
   getCurrentAssociation,
   listAssociations,
+  updateAssociation,
   updateAssociationStatus
 };

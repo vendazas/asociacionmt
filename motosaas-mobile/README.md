@@ -43,6 +43,23 @@ El proyecto iOS debe abrirse desde `ios/MotoSaaSMobile.xcworkspace` si se usa Xc
 
 La app consume solo la API REST del backend con Axios.
 
+URLs locales usadas en desarrollo:
+
+```text
+iOS Simulator: http://127.0.0.1:4007/api/v1
+Android Emulator: http://10.0.2.2:4007/api/v1
+```
+
+Cuando cambie configuracion nativa como `Info.plist`, recompila la app iOS con `npm run ios`.
+
+En desarrollo, la app intenta iniciar automaticamente con el usuario seed de prueba:
+
+```text
+platform / mobile@motosaas.local / ChangeMe123!
+```
+
+Si el backend no esta levantado o falta correr `npm run seed` en `motosaas-backend`, se muestra el login normal con esas credenciales precargadas.
+
 Archivo principal:
 
 ```text

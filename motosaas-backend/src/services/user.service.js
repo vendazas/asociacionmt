@@ -3,6 +3,7 @@ const { Roles } = require("../constants/roles");
 const { ApiError } = require("../utils/apiError");
 const { hashPassword } = require("../utils/password");
 const { serializeUser } = require("../utils/serializers");
+const associationPolicy = require("./associationPolicy.service");
 
 async function listUsers(user, query = {}) {
   const where = {
@@ -38,6 +39,10 @@ async function createUser(user, payload) {
 
   if (![Roles.SUPER_ADMIN, Roles.ASSOCIATION_ADMIN, Roles.DRIVER, Roles.CUSTOMER].includes(role)) {
     throw new ApiError(400, "Invalid role.");
+  }
+
+  if (role === Roles.DRIVER) {
+    await associationPolicy.assertCanRegisterDriver(user.association_id);
   }
 
   const passwordHash = await hashPassword(payload.password);

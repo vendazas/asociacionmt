@@ -16,7 +16,10 @@ enum UserRole {
 
 enum RecordStatus {
   ACTIVE
+  LIMITED
   INACTIVE
+  BLOCKED
+  MAINTENANCE
   SUSPENDED
   DELETED
   PENDING
@@ -30,20 +33,26 @@ enum DriverAvailability {
 
 enum TripStatus {
   REQUESTED
-  ACCEPTED
+  SEARCHING_DRIVER
+  DRIVER_ASSIGNED
+  DRIVER_ARRIVING
+  TRIP_STARTED
+  TRIP_FINISHED
+  TRIP_CANCELLED
   REJECTED
-  IN_PROGRESS
-  COMPLETED
-  CANCELED
+  EXPIRED
 }
 
 enum TripEvent {
   REQUESTED
-  ACCEPTED
+  SEARCHING_DRIVER
+  DRIVER_ASSIGNED
+  DRIVER_ARRIVING
   REJECTED
   STARTED
   FINISHED
-  CANCELED
+  CANCELLED
+  EXPIRED
   LOCATION_UPDATED
   STATUS_CHECKED
   RATED
@@ -54,10 +63,17 @@ model Association {
   association_id String       @unique @default(uuid())
   name           String
   slug           String       @unique
+  representative_name String?
+  phone          String?
+  email          String?
   city           String
+  address        String?
   country        String       @default("BO")
   timezone       String       @default("America/La_Paz")
   status         RecordStatus @default(ACTIVE)
+  driver_limit   Int?
+  vehicle_limit  Int?
+  observation    String?
   created_by     String?
   created_at     DateTime     @default(now())
   updated_by     String?
@@ -82,8 +98,13 @@ model User {
   id             String       @id @default(uuid())
   association_id String
   email          String
+  username       String?
   password_hash  String?
+  password_is_temporary Boolean @default(false)
   google_subject String?
+  first_name     String?
+  last_name      String?
+  document_number String?
   full_name      String
   phone          String?
   role           UserRole
@@ -103,6 +124,8 @@ model User {
   ratings_received  Rating[]       @relation("RatingsReceived")
 
   @@unique([association_id, email])
+  @@unique([association_id, username])
+  @@unique([association_id, document_number])
   @@unique([association_id, google_subject])
   @@index([association_id, role, status])
   @@map("users")
@@ -133,8 +156,9 @@ model DriverProfile {
 model Vehicle {
   id             String       @id @default(uuid())
   association_id String
-  driver_user_id String
+  driver_user_id String?
   plate          String
+  internal_number String?
   brand          String?
   model          String?
   color          String?
@@ -146,10 +170,11 @@ model Vehicle {
   updated_at     DateTime     @updatedAt
 
   association Association @relation(fields: [association_id], references: [association_id])
-  driver      User        @relation(fields: [driver_user_id], references: [id])
+  driver      User?       @relation(fields: [driver_user_id], references: [id])
   trips       Trip[]
 
   @@unique([association_id, plate])
+  @@unique([association_id, internal_number])
   @@index([association_id, driver_user_id, status])
   @@map("vehicles")
 }
@@ -165,6 +190,7 @@ model FareConfig {
   waiting_per_minute_fare         Decimal      @db.Decimal(10, 2)
   association_commission_percent  Decimal      @db.Decimal(5, 2)
   platform_commission_percent     Decimal      @db.Decimal(5, 2)
+  max_driver_search_radius_km     Decimal      @default(5) @db.Decimal(10, 2)
   night_start_hour                Int          @default(22)
   night_end_hour                  Int          @default(6)
   status                          RecordStatus @default(ACTIVE)
@@ -183,6 +209,7 @@ model CoverageZone {
   id               String       @id @default(uuid())
   association_id   String
   name             String
+  city             String?
   description      String?
   center_latitude  Decimal?     @db.Decimal(10, 7)
   center_longitude Decimal?     @db.Decimal(10, 7)

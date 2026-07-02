@@ -10,6 +10,19 @@ function findActiveByEmail(associationId, email) {
   });
 }
 
+function findActiveByEmailOrUsername(associationId, identifier) {
+  return prisma.user.findFirst({
+    where: {
+      association_id: associationId,
+      status: "ACTIVE",
+      OR: [
+        { email: identifier },
+        { username: identifier }
+      ]
+    }
+  });
+}
+
 function findActiveById(associationId, id) {
   return prisma.user.findFirst({
     where: {
@@ -21,9 +34,14 @@ function findActiveById(associationId, id) {
         id: true,
         association_id: true,
         email: true,
+        username: true,
+        first_name: true,
+        last_name: true,
+        document_number: true,
         full_name: true,
         phone: true,
         role: true,
+        password_is_temporary: true,
         status: true
       }
   });
@@ -45,6 +63,7 @@ function updateLastLogin(userId) {
 
 module.exports = {
   createUser,
+  findActiveByEmailOrUsername,
   findActiveByEmail,
   findActiveById,
   updateLastLogin

@@ -1,7 +1,12 @@
 const express = require("express");
 const authController = require("../controllers/auth.controller");
 const { authenticate } = require("../middlewares/auth.middleware");
-const { validateGoogleLogin, validateLogin, validateRegister } = require("../validators/auth.validator");
+const {
+  validateForgotPassword,
+  validateGoogleLogin,
+  validateLogin,
+  validateRegister
+} = require("../validators/auth.validator");
 const { asyncHandler } = require("../utils/asyncHandler");
 
 const router = express.Router();
@@ -10,7 +15,7 @@ const router = express.Router();
  * @swagger
  * /api/v1/auth/login:
  *   post:
- *     summary: Login con email y password
+ *     summary: Login con email o usuario y password
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -53,6 +58,8 @@ router.post("/register", validateRegister, asyncHandler(authController.register)
  *         description: Sesion iniciada
  */
 router.post("/google", validateGoogleLogin, asyncHandler(authController.googleLogin));
+
+router.post("/forgot-password", validateForgotPassword, asyncHandler(authController.forgotPassword));
 
 /**
  * @swagger

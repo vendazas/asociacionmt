@@ -41,16 +41,22 @@ No usa Socket.IO, Firebase, colas, microservicios, Docker ni TypeScript.
 npm install
 cp .env.example .env
 npm run prisma:generate
-npm run prisma:migrate -- --name init
-npm run seed
 npm run dev
+```
+
+Al iniciar, el servicio ejecuta `prisma db push --skip-generate` para crear las tablas definidas en `prisma/schema.prisma` cuando falten. Si las tablas ya existen y el esquema esta al dia, no aplica cambios.
+
+Para poblar usuarios y datos base:
+
+```bash
+npm run seed
 ```
 
 Servicios:
 
-- API: `http://localhost:4000`
-- Swagger: `http://localhost:4000/api/docs`
-- Health: `http://localhost:4000/health`
+- API: `http://localhost:4007`
+- Swagger: `http://localhost:4007/api/docs`
+- Health: `http://localhost:4007/health`
 
 ## Multi asociacion
 
@@ -160,6 +166,5 @@ Comandos VPS:
 ```bash
 npm install
 npm run build
-npm run prisma:deploy
 npm run pm2:start
 ```

@@ -12,12 +12,12 @@ async function rateTrip(user, payload) {
     where: {
       id: payload.tripId,
       association_id: user.association_id,
-      status: "COMPLETED"
+      status: "TRIP_FINISHED"
     }
   });
 
   if (!trip) {
-    throw new ApiError(404, "Completed trip not found.");
+    throw new ApiError(404, "Finished trip not found.");
   }
 
   const allowedRaters = [trip.customer_user_id, trip.driver_user_id].filter(Boolean);

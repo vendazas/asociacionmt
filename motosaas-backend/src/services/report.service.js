@@ -10,7 +10,7 @@ async function getAssociationSummary(associationId) {
     prisma.trip.aggregate({
       where: {
         association_id: associationId,
-        status: "COMPLETED"
+        status: "TRIP_FINISHED"
       },
       _sum: {
         final_fare: true
@@ -63,7 +63,7 @@ async function getPlatformSummary() {
       _count: { id: true }
     }),
     prisma.trip.aggregate({
-      where: { status: "COMPLETED" },
+      where: { status: "TRIP_FINISHED" },
       _sum: { final_fare: true }
     })
   ]);
@@ -108,7 +108,7 @@ async function getTodaySummary(associationId) {
     prisma.trip.aggregate({
       where: {
         association_id: associationId,
-        status: "COMPLETED",
+        status: "TRIP_FINISHED",
         completed_at: { gte: start, lt: end }
       },
       _sum: { final_fare: true }
@@ -129,14 +129,14 @@ async function getDriverEarnings(user) {
       where: {
         association_id: user.association_id,
         driver_user_id: user.id,
-        status: "COMPLETED"
+        status: "TRIP_FINISHED"
       }
     }),
     prisma.trip.aggregate({
       where: {
         association_id: user.association_id,
         driver_user_id: user.id,
-        status: "COMPLETED"
+        status: "TRIP_FINISHED"
       },
       _sum: { final_fare: true },
       _avg: { final_fare: true }

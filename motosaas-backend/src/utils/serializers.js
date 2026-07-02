@@ -13,10 +13,20 @@ function serializeAssociation(association) {
     association_id: association.association_id,
     name: association.name,
     slug: association.slug,
+    representative_name: association.representative_name,
+    phone: association.phone,
+    email: association.email,
     city: association.city,
+    address: association.address,
     country: association.country,
     timezone: association.timezone,
-    status: association.status
+    status: association.status,
+    driver_limit: association.driver_limit,
+    vehicle_limit: association.vehicle_limit,
+    observation: association.observation,
+    created_at: association.created_at,
+    updated_at: association.updated_at,
+    counts: association.counts || null
   };
 }
 
@@ -29,9 +39,14 @@ function serializeUser(user) {
     id: user.id,
     association_id: user.association_id,
     email: user.email,
+    username: user.username,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    document_number: user.document_number,
     full_name: user.full_name,
     phone: user.phone,
     role: user.role,
+    password_is_temporary: Boolean(user.password_is_temporary),
     status: user.status
   };
 }
@@ -56,6 +71,28 @@ function serializeDriver(driverProfile) {
   };
 }
 
+function serializeVehicle(vehicle) {
+  if (!vehicle) {
+    return null;
+  }
+
+  return {
+    id: vehicle.id,
+    association_id: vehicle.association_id,
+    driver_user_id: vehicle.driver_user_id,
+    plate: vehicle.plate,
+    internal_number: vehicle.internal_number,
+    brand: vehicle.brand,
+    model: vehicle.model,
+    color: vehicle.color,
+    year: vehicle.year,
+    status: vehicle.status,
+    driver: serializeUser(vehicle.driver),
+    created_at: vehicle.created_at,
+    updated_at: vehicle.updated_at
+  };
+}
+
 function serializeFareConfig(fare) {
   if (!fare) {
     return null;
@@ -72,9 +109,33 @@ function serializeFareConfig(fare) {
     waiting_per_minute_fare: money(fare.waiting_per_minute_fare),
     association_commission_percent: money(fare.association_commission_percent),
     platform_commission_percent: money(fare.platform_commission_percent),
+    max_driver_search_radius_km: money(fare.max_driver_search_radius_km),
     night_start_hour: fare.night_start_hour,
     night_end_hour: fare.night_end_hour,
-    status: fare.status
+    status: fare.status,
+    created_at: fare.created_at,
+    updated_at: fare.updated_at
+  };
+}
+
+function serializeZone(zone) {
+  if (!zone) {
+    return null;
+  }
+
+  return {
+    id: zone.id,
+    association_id: zone.association_id,
+    name: zone.name,
+    city: zone.city,
+    description: zone.description,
+    center_latitude: toNumber(zone.center_latitude),
+    center_longitude: toNumber(zone.center_longitude),
+    radius_km: toNumber(zone.radius_km),
+    polygon: zone.polygon || null,
+    status: zone.status,
+    created_at: zone.created_at,
+    updated_at: zone.updated_at
   };
 }
 
@@ -126,5 +187,7 @@ module.exports = {
   serializeDriver,
   serializeFareConfig,
   serializeTrip,
+  serializeVehicle,
+  serializeZone,
   serializeUser
 };

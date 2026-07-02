@@ -2,13 +2,34 @@ const { app } = require("./app");
 const { env } = require("./config/env");
 const { prisma } = require("./config/db");
 const { logger } = require("./config/logger");
+const { syncDatabaseSchema } = require("./config/schemaSync");
 
-const server = app.listen(env.port, () => {
-  logger.info(`motosaas-backend listening on port ${env.port}`);
-});
+let server;
+
+async function start() {
+  try {
+    await syncDatabaseSchema();
+
+    server = app.listen(env.port, env.host, () => {
+      logger.info(`motosaas-backend listening on ${env.host}:${env.port}`);
+    });
+  } catch (error) {
+    logger.error("Failed to start motosaas-backend.", {
+      message: error.message,
+      stack: error.stack
+    });
+    await prisma.$disconnect();
+    process.exit(1);
+  }
+}
 
 async function shutdown(signal) {
   logger.info(`Received ${signal}. Shutting down.`);
+
+  if (!server) {
+    await prisma.$disconnect();
+    process.exit(0);
+  }
 
   server.close(async () => {
     await prisma.$disconnect();
@@ -27,3 +48,5 @@ process.on("uncaughtException", (error) => {
   logger.error("Uncaught exception", { error });
   process.exit(1);
 });
+
+start();

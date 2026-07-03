@@ -184,10 +184,11 @@ function isInsideZone(location, zone) {
   return distanceKm <= toNumber(zone.radius_km);
 }
 
-async function findAvailableDriversForTrip(associationId, payload, maxRadiusKm, coverageZone = null) {
+async function findAvailableDriversForTrip(associationId, payload, maxRadiusKm, coverageZone = null, excludeUserId = null) {
   const drivers = await prisma.driverProfile.findMany({
     where: {
       association_id: associationId,
+      ...(excludeUserId ? { user_id: { not: excludeUserId } } : {}),
       availability_status: "AVAILABLE",
       status: "ACTIVE",
       current_latitude: { not: null },
@@ -241,7 +242,8 @@ async function requestTrip(user, payload) {
     user.association_id,
     payload,
     fare.fareConfig.max_driver_search_radius_km,
-    coverageZone
+    coverageZone,
+    user.id
   );
 
   const trip = await prisma.$transaction(async (tx) => {
@@ -342,6 +344,7 @@ async function acceptTrip(user, tripId) {
       where: {
         id: tripId,
         association_id: user.association_id,
+        customer_user_id: { not: user.id },
         driver_user_id: null,
         status: { in: pendingStatuses }
       },
@@ -758,6 +761,7 @@ async function listPendingTripsForDriver(user) {
   const trips = await prisma.trip.findMany({
     where: {
       association_id: user.association_id,
+      customer_user_id: { not: user.id },
       status: { in: pendingStatuses },
       driver_user_id: null
     },

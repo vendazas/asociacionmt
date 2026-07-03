@@ -251,6 +251,18 @@ const swaggerSpec = swaggerJsdoc({
             meta: { type: "object" }
           }
         },
+        ReportDashboardResponse: {
+          type: "object",
+          properties: {
+            scope: { type: "string", enum: ["SUPER_ADMIN", "ASSOCIATION_ADMIN"] },
+            filters: { type: "object" },
+            summary: { type: "object" },
+            tripsByStatus: { type: "object" },
+            tripsByCity: { type: "array", items: { type: "object" } },
+            tripsByAssociation: { type: "array", items: { type: "object" } },
+            topDrivers: { type: "array", items: { type: "object" } }
+          }
+        },
         ErrorResponse: {
           type: "object",
           properties: {
@@ -948,6 +960,30 @@ const swaggerSpec = swaggerJsdoc({
             }
           },
           responses: { 200: { description: "Viaje finalizado con tarifa final" } }
+        }
+      },
+      "/api/v1/reports/dashboard": {
+        get: {
+          summary: "Dashboard de reportes para SUPER_ADMIN o ASSOCIATION_ADMIN",
+          tags: ["Reports"],
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { in: "query", name: "associationId", schema: { type: "string" } },
+            { in: "query", name: "driverId", schema: { type: "string" } },
+            { in: "query", name: "startDate", schema: { type: "string", format: "date" } },
+            { in: "query", name: "endDate", schema: { type: "string", format: "date" } },
+            { in: "query", name: "status", schema: { $ref: "#/components/schemas/TripStatus" } }
+          ],
+          responses: {
+            200: {
+              description: "Metricas, tablas y series simples de reportes",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ReportDashboardResponse" }
+                }
+              }
+            }
+          }
         }
       },
       "/api/v1/admin/trips": {

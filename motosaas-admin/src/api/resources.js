@@ -70,6 +70,7 @@ export const tripsApi = {
 };
 
 export const reportsApi = {
+  dashboard: (params) => apiClient.get("/reports/dashboard", { params }).then(data),
   platformSummary: () => apiClient.get("/reports/platform-summary").then(data),
   associationSummary: () => apiClient.get("/reports/summary").then(data),
   today: () => apiClient.get("/reports/today").then(data)

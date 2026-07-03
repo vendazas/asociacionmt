@@ -1,7 +1,7 @@
 import { apiClient } from "../../api/client";
 
 export async function login(credentials) {
-  const response = await apiClient.post("/auth/login", credentials);
+  const response = await apiClient.post("/auth/login", credentials, { skipAuth: true });
   return response.data.data;
 }
 

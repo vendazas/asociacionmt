@@ -1,5 +1,5 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
-import { clearAccessToken, getAccessToken, saveAccessToken } from "../../api/client";
+import { AUTH_UNAUTHORIZED_EVENT, clearAccessToken, getAccessToken, saveAccessToken } from "../../api/client";
 import { getMe, login as loginRequest } from "./auth.service";
 
 export const AuthContext = createContext(null);
@@ -7,6 +7,18 @@ export const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [isBooting, setIsBooting] = useState(Boolean(getAccessToken()));
+
+  useEffect(() => {
+    function handleUnauthorized() {
+      setSession(null);
+    }
+
+    window.addEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+
+    return () => {
+      window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, handleUnauthorized);
+    };
+  }, []);
 
   useEffect(() => {
     if (!getAccessToken()) {

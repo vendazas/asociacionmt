@@ -14,6 +14,13 @@ router.get(
 );
 
 router.get(
+  "/api/v1/reports/dashboard",
+  authenticate,
+  authorize("ASSOCIATION_ADMIN", "SUPER_ADMIN"),
+  asyncHandler(reportController.dashboard)
+);
+
+router.get(
   "/api/v1/reports/summary",
   authenticate,
   authorize("ASSOCIATION_ADMIN", "SUPER_ADMIN"),

@@ -7,6 +7,7 @@ npm-debug.log
 vendor/bundle/
 .bundle/
 android/.gradle/
+android/local.properties
 android/app/build/
 ios/Pods/
 ios/build/

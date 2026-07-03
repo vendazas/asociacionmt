@@ -44,7 +44,13 @@ npm run prisma:generate
 npm run dev
 ```
 
-Al iniciar, el servicio ejecuta `prisma db push --skip-generate` para crear las tablas definidas en `prisma/schema.prisma` cuando falten. Si las tablas ya existen y el esquema esta al dia, no aplica cambios.
+Al iniciar, el servicio revisa la base de datos. Si la base ya tiene tablas, ejecuta `prisma migrate deploy` para aplicar migraciones pendientes sin usar `db push`. Si la base esta vacia, crea el esquema inicial y marca las migraciones locales como aplicadas.
+
+Si estas conectando una base existente que ya tenia tablas pero no tenia historial de Prisma, ejecuta una sola vez:
+
+```bash
+npm run prisma:baseline-existing
+```
 
 Para poblar usuarios y datos base:
 

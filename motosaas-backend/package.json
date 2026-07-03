@@ -13,6 +13,7 @@
     "prisma:generate": "node scripts/prisma-generate.js",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
+    "prisma:baseline-existing": "node scripts/prisma-baseline-existing-db.js",
     "seed": "prisma db seed",
     "pm2:start": "pm2 start ecosystem.config.js",
     "pm2:reload": "pm2 reload ecosystem.config.js"

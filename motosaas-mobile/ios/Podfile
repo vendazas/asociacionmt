@@ -1,5 +1,20 @@
+# React Native 0.76 requires Node 18+ during CocoaPods codegen. Prefer the
+# project Node when pod install is executed from a shell that still points to
+# the old system Node.
+project_node_binary = ENV['NODE_BINARY']
+fallback_node_binary = File.expand_path('~/.nvm/versions/node/v24.11.0/bin/node')
+
+if project_node_binary.nil? || project_node_binary.empty?
+  project_node_binary = File.exist?(fallback_node_binary) ? fallback_node_binary : 'node'
+end
+
+ENV['NODE_BINARY'] = project_node_binary
+if File.exist?(project_node_binary)
+  ENV['PATH'] = "#{File.dirname(project_node_binary)}:#{ENV['PATH']}"
+end
+
 # Resolve react_native_pods.rb with node to allow for hoisting
-require Pod::Executable.execute_command('node', ['-p',
+require Pod::Executable.execute_command(project_node_binary, ['-p',
   'require.resolve(
     "react-native/scripts/react_native_pods.rb",
     {paths: [process.argv[1]]},

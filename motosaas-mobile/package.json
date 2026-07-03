@@ -4,7 +4,7 @@
   "private": true,
   "description": "Aplicacion movil React Native CLI para MotoSaaS.",
   "scripts": {
-    "android": "react-native run-android",
+    "android": "NODE_BINARY=$HOME/.nvm/versions/node/v24.11.0/bin/node JAVA_HOME=/usr/local/opt/openjdk@17 ANDROID_HOME=$HOME/Library/Android/sdk ANDROID_SDK_ROOT=$HOME/Library/Android/sdk PATH=$HOME/.nvm/versions/node/v24.11.0/bin:$HOME/Library/Android/sdk/platform-tools:$HOME/Library/Android/sdk/emulator:/usr/local/opt/openjdk@17/bin:$PATH react-native run-android",
     "ios": "react-native run-ios",
     "start": "react-native start",
     "pods": "RUBYOPT=-rlogger BUNDLE_PATH=vendor/bundle bundle exec pod install --project-directory=ios",
@@ -14,9 +14,11 @@
     "@react-native-async-storage/async-storage": "^2.1.0",
     "@tanstack/react-query": "^5.62.8",
     "axios": "^1.7.9",
+    "lucide-react-native": "^1.23.0",
     "react": "18.3.1",
     "react-native": "0.76.5",
-    "react-native-maps": "^1.20.1"
+    "react-native-maps": "1.20.1",
+    "react-native-svg": "^15.8.0"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",

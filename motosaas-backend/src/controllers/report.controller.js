@@ -15,6 +15,11 @@ async function todaySummary(req, res) {
   res.status(200).json({ data });
 }
 
+async function dashboard(req, res) {
+  const data = await reportService.getDashboardReport(req.user, req.query);
+  res.status(200).json({ data });
+}
+
 async function driverEarnings(req, res) {
   const data = await reportService.getDriverEarnings(req.user);
   res.status(200).json({ data });
@@ -22,6 +27,7 @@ async function driverEarnings(req, res) {
 
 module.exports = {
   associationSummary,
+  dashboard,
   driverEarnings,
   platformSummary,
   todaySummary

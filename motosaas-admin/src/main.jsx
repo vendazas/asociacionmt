@@ -6,10 +6,20 @@ import { AuthProvider } from "./features/auth/AuthProvider";
 import App from "./App";
 import "./styles/global.css";
 
+function shouldRetryRequest(failureCount, error) {
+  const status = error?.response?.status;
+
+  if (status === 401 || status === 403) {
+    return false;
+  }
+
+  return failureCount < 1;
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: 1,
+      retry: shouldRetryRequest,
       refetchOnWindowFocus: false
     },
     mutations: {

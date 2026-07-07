@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
+  Easing,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -11,14 +13,17 @@ import {
 import MapView, { Marker } from "react-native-maps";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Camera,
   ChevronRight,
   CircleCheckBig,
   CreditCard,
   Headphones,
   History,
   House,
+  LocateFixed,
   LogOut,
-  Route,
+  Menu,
+  Navigation,
   Scooter,
   SendHorizontal,
   Star,
@@ -28,18 +33,19 @@ import {
 import { AppModes, modeLabels } from "../../config/roles";
 import { ratingsApi, tripsApi } from "../../api/resources";
 import { useAuth } from "../../providers/AuthProvider";
+import { useRealtimeTripRoom } from "../../providers/RealtimeProvider";
 
 const terminalStatuses = ["TRIP_FINISHED", "TRIP_CANCELLED", "REJECTED", "EXPIRED"];
 const activeStatuses = ["REQUESTED", "SEARCHING_DRIVER", "DRIVER_ASSIGNED", "DRIVER_ARRIVING", "TRIP_STARTED"];
 
 const colors = {
-  primary: "#0F8B7A",
-  primaryDark: "#087263",
-  background: "#F7F8FA",
+  primary: "#0F9D8A",
+  primaryDark: "#0F766E",
+  background: "#F8FAFC",
   text: "#111827",
   muted: "#6B7280",
   border: "#E5E7EB",
-  danger: "#EF476F",
+  danger: "#EF4444",
   white: "#FFFFFF"
 };
 
@@ -153,6 +159,40 @@ function stageTitle(status) {
   };
 
   return labels[status] || "Estado del viaje";
+}
+
+function sameId(left, right) {
+  return left !== undefined && left !== null && right !== undefined && right !== null && String(left) === String(right);
+}
+
+function statusRank(status) {
+  const ranks = {
+    REQUESTED: 1,
+    SEARCHING_DRIVER: 2,
+    DRIVER_ASSIGNED: 3,
+    DRIVER_ARRIVING: 4,
+    TRIP_STARTED: 5,
+    TRIP_FINISHED: 6,
+    TRIP_CANCELLED: 6,
+    REJECTED: 6,
+    EXPIRED: 6
+  };
+
+  return ranks[status] || 0;
+}
+
+function pickVisibleTrip(candidates) {
+  return candidates.filter(Boolean).reduce((selected, candidate) => {
+    if (!selected) {
+      return candidate;
+    }
+
+    if (sameId(selected.id, candidate.id)) {
+      return statusRank(candidate.status) >= statusRank(selected.status) ? candidate : selected;
+    }
+
+    return selected;
+  }, null);
 }
 
 function coordinateFromEvent(event) {
@@ -276,7 +316,9 @@ function tripRoute(trip) {
 export function CustomerHomeScreen() {
   const { activeMode, availableModes, logout, session, setActiveMode } = useAuth();
   const queryClient = useQueryClient();
+  const drawerProgress = useRef(new Animated.Value(0)).current;
   const [activeTab, setActiveTab] = useState("home");
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [pointMode, setPointMode] = useState("origin");
   const [origin, setOrigin] = useState({ latitude: "-17.7833", longitude: "-63.1821" });
   const [destination, setDestination] = useState({ latitude: "-17.7750", longitude: "-63.1950" });
@@ -285,6 +327,15 @@ export function CustomerHomeScreen() {
   const [ratingScore, setRatingScore] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
   const [ratedTripIds, setRatedTripIds] = useState([]);
+
+  useEffect(() => {
+    Animated.timing(drawerProgress, {
+      toValue: drawerOpen ? 1 : 0,
+      duration: 260,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true
+    }).start();
+  }, [drawerOpen, drawerProgress]);
 
   const estimateMutation = useMutation({
     mutationFn: () =>
@@ -314,12 +365,11 @@ export function CustomerHomeScreen() {
 
   const currentTripQuery = useQuery({
     queryKey: ["current-trip"],
-    queryFn: tripsApi.current,
-    refetchInterval: activeTripId ? false : 10000
+    queryFn: tripsApi.current
   });
 
   useEffect(() => {
-    if (!activeTripId && currentTripQuery.data?.customer_user_id === session?.user?.id) {
+    if (!activeTripId && sameId(currentTripQuery.data?.customer_user_id, session?.user?.id)) {
       setActiveTripId(currentTripQuery.data.id);
     }
   }, [activeTripId, currentTripQuery.data?.customer_user_id, currentTripQuery.data?.id, session?.user?.id]);
@@ -327,17 +377,12 @@ export function CustomerHomeScreen() {
   const statusQuery = useQuery({
     queryKey: ["trip-status", activeTripId],
     queryFn: () => tripsApi.status(activeTripId),
-    enabled: Boolean(activeTripId),
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status && terminalStatuses.includes(status) ? false : 5000;
-    }
+    enabled: Boolean(activeTripId)
   });
 
   const historyQuery = useQuery({
     queryKey: ["customer-history"],
-    queryFn: () => tripsApi.history({ limit: 12 }),
-    refetchInterval: activeTripId ? 12000 : false
+    queryFn: () => tripsApi.history({ limit: 12 })
   });
 
   const cancelMutation = useMutation({
@@ -375,9 +420,8 @@ export function CustomerHomeScreen() {
     [origin.latitude, origin.longitude]
   );
 
-  const currentPassengerTrip =
-    currentTripQuery.data?.customer_user_id === session?.user?.id ? currentTripQuery.data : null;
-  const trip = cancelMutation.data || statusQuery.data || requestMutation.data || currentPassengerTrip;
+  const currentPassengerTrip = sameId(currentTripQuery.data?.customer_user_id, session?.user?.id) ? currentTripQuery.data : null;
+  const trip = pickVisibleTrip([cancelMutation.data, statusQuery.data, currentPassengerTrip, requestMutation.data]);
   const isTerminal = trip?.status ? terminalStatuses.includes(trip.status) : false;
   const isActive = trip?.status ? activeStatuses.includes(trip.status) : false;
   const isTripLoading = Boolean(activeTripId && !trip);
@@ -398,6 +442,39 @@ export function CustomerHomeScreen() {
   }
 
   const canRateTrip = canRateDriverForTrip(trip);
+  useRealtimeTripRoom(trip?.id || activeTripId);
+
+  useEffect(() => {
+    if (hasBlockingTrip) {
+      return undefined;
+    }
+
+    const originLatitude = Number(origin.latitude);
+    const originLongitude = Number(origin.longitude);
+    const destinationLatitude = Number(destination.latitude);
+    const destinationLongitude = Number(destination.longitude);
+
+    if (
+      !Number.isFinite(originLatitude) ||
+      !Number.isFinite(originLongitude) ||
+      !Number.isFinite(destinationLatitude) ||
+      !Number.isFinite(destinationLongitude)
+    ) {
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      estimateMutation.mutate();
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [
+    destination.latitude,
+    destination.longitude,
+    hasBlockingTrip,
+    origin.latitude,
+    origin.longitude
+  ]);
 
   function resetEstimate() {
     if (estimateMutation.data || estimateMutation.error) {
@@ -430,6 +507,15 @@ export function CustomerHomeScreen() {
     setActiveTab("home");
   }
 
+  function selectDrawerTab(tab) {
+    setActiveTab(tab);
+    setDrawerOpen(false);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+  }
+
   function handlePrimaryRequest() {
     if (hasBlockingTrip || isActive || requestMutation.isPending) {
       return;
@@ -458,94 +544,51 @@ export function CustomerHomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.appShell}>
+        <PassengerHeader activeTab={activeTab} onMenuPress={() => setDrawerOpen(true)} />
+
         <View style={styles.body}>
           {activeTab === "home" ? (
             <View style={styles.homeScreen}>
-              <MapView style={styles.fullMap} initialRegion={region} region={region} onPress={setPointFromMap}>
-                <Marker coordinate={{ latitude: Number(origin.latitude), longitude: Number(origin.longitude) }} title="Origen">
-                  <View style={styles.currentMarkerHalo}>
-                    <View style={styles.currentMarkerDot} />
-                  </View>
-                </Marker>
-                <Marker
-                  coordinate={{ latitude: Number(destination.latitude), longitude: Number(destination.longitude) }}
-                  title="Destino"
-                />
-              </MapView>
+              <View style={styles.passengerMapPanel}>
+                <MapView style={styles.fullMap} initialRegion={region} region={region} onPress={setPointFromMap}>
+                  <Marker coordinate={{ latitude: Number(origin.latitude), longitude: Number(origin.longitude) }} title="Origen">
+                    <View style={styles.currentMarkerHalo}>
+                      <View style={styles.currentMarkerDot} />
+                    </View>
+                  </Marker>
+                  <Marker
+                    coordinate={{ latitude: Number(destination.latitude), longitude: Number(destination.longitude) }}
+                    title="Destino"
+                  />
+                </MapView>
+                <MapFloatingButtons onCenter={() => {}} onLocate={() => {}} />
+              </View>
 
-              <ScrollView style={styles.homeSheet} contentContainerStyle={styles.homeSheetContent} showsVerticalScrollIndicator={false}>
-                <View style={styles.sheetHandle} />
+              <BottomSheet>
 
                 {!hasBlockingTrip ? (
                   <>
-                    <View style={styles.routeCard}>
-                      <PointRow
-                        active={pointMode === "origin"}
-                        color={colors.danger}
-                        title="Origen"
-                        subtitle={pointMode === "origin" ? "Toca el mapa para ajustar el origen" : pointMeta(origin)}
-                        onPress={() => choosePoint("origin")}
-                      />
-                      <View style={styles.routeDivider} />
-                      <PointRow
-                        active={pointMode === "destination"}
-                        color={colors.primary}
-                        title="Destino"
-                        subtitle={pointMode === "destination" ? "Toca el mapa para ajustar el destino" : pointMeta(destination)}
-                        onPress={() => choosePoint("destination")}
-                      />
-                    </View>
+                    <RideLocationCard
+                      destinationActive={pointMode === "destination"}
+                      destinationSubtitle={pointMode === "destination" ? "Toca el mapa para ajustar el destino" : "A donde quieres ir?"}
+                      onDestinationPress={() => choosePoint("destination")}
+                      onOriginPress={() => choosePoint("origin")}
+                      originActive={pointMode === "origin"}
+                      originSubtitle={pointMode === "origin" ? "Toca el mapa para ajustar el origen" : "Ubicacion actual"}
+                    />
 
-                    <View style={styles.fareCard}>
-                      <View style={styles.fareIconWrap}>
-                        <Route color={colors.white} size={iconSize(24)} strokeWidth={ICON_STROKE} />
-                      </View>
-                      <View style={styles.fareCopy}>
-                        <Text style={styles.fareLabel}>Tarifa estimada</Text>
-                        <Text style={styles.fareValue}>{estimateRange(estimateMutation.data)}</Text>
-                        <Text style={styles.fareMeta}>
-                          {distanceKm ? `${distanceKm.toFixed(1)} km` : "Calcula antes de solicitar"}
-                          {durationMin ? `  ·  ${durationMin} min` : ""}
-                        </Text>
-                      </View>
-                      <Pressable
-                        disabled={estimateMutation.isPending}
-                        onPress={() => estimateMutation.mutate()}
-                        style={({ pressed }) => [
-                          styles.fareButton,
-                          pressed ? styles.pressed : null,
-                          estimateMutation.isPending ? styles.disabled : null
-                        ]}
-                      >
-                        {estimateMutation.isPending ? (
-                          <ActivityIndicator color={colors.white} />
-                        ) : (
-                          <Text style={styles.fareButtonText}>Calcular</Text>
-                        )}
-                      </Pressable>
-                    </View>
+                    <FareCard
+                      distanceKm={distanceKm}
+                      durationMin={durationMin}
+                      estimateData={estimateMutation.data}
+                      isEstimateLoading={estimateMutation.isPending}
+                      onRequest={handlePrimaryRequest}
+                      requestDisabled={!estimateMutation.data || estimateMutation.isPending || requestMutation.isPending}
+                      requestPending={requestMutation.isPending}
+                    />
 
                     {estimateMutation.error ? <Text style={styles.error}>{apiMessage(estimateMutation.error)}</Text> : null}
                     {requestMutation.error ? <Text style={styles.error}>{apiMessage(requestMutation.error)}</Text> : null}
-
-                    <Pressable
-                      disabled={requestMutation.isPending}
-                      onPress={handlePrimaryRequest}
-                      style={({ pressed }) => [
-                        styles.primaryButton,
-                        pressed ? styles.pressed : null,
-                        requestMutation.isPending ? styles.disabled : null
-                      ]}
-                    >
-                      {requestMutation.isPending ? (
-                        <ActivityIndicator color={colors.white} />
-                      ) : (
-                        <>
-                          <Scooter color={colors.white} size={iconSize(21)} strokeWidth={ICON_STROKE} />
-                          <Text style={styles.primaryButtonText}>Solicitar viaje</Text>
-                        </>
-                      )}
-                    </Pressable>
                   </>
                 ) : null}
 
@@ -638,7 +681,7 @@ export function CustomerHomeScreen() {
                     />
                   </View>
                 ) : null}
-              </ScrollView>
+              </BottomSheet>
             </View>
           ) : null}
 
@@ -715,38 +758,6 @@ export function CustomerHomeScreen() {
                 </View>
               </View>
 
-              {availableModes.length > 1 ? (
-                <View style={styles.modeSelector}>
-                  {[AppModes.DRIVER, AppModes.PASSENGER]
-                    .filter((mode) => availableModes.includes(mode))
-                    .map((mode) => {
-                      const isSelected = activeMode === mode;
-                      const Icon = mode === AppModes.DRIVER ? Scooter : User;
-
-                      return (
-                        <Pressable
-                          key={mode}
-                          onPress={() => setActiveMode(mode)}
-                          style={({ pressed }) => [
-                            styles.modeOption,
-                            isSelected ? styles.modeOptionActive : null,
-                            pressed ? styles.pressed : null
-                          ]}
-                        >
-                          <Icon
-                            color={isSelected ? colors.white : colors.text}
-                            size={iconSize(18)}
-                            strokeWidth={ICON_STROKE}
-                          />
-                          <Text style={[styles.modeText, isSelected ? styles.modeTextActive : null]}>
-                            {modeLabels[mode]}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                </View>
-              ) : null}
-
               <View style={styles.accountMenu}>
                 <AccountOption Icon={Star} title="Favoritos" subtitle="Lugares guardados" onPress={() => choosePoint("destination")} />
                 <AccountOption Icon={CreditCard} title="Metodos de pago" subtitle="Tarjeta, efectivo" />
@@ -761,25 +772,21 @@ export function CustomerHomeScreen() {
           ) : null}
         </View>
 
-        <BottomNavigation activeTab={activeTab} onSelect={setActiveTab} />
+        <PassengerDrawer
+          activeMode={activeMode}
+          activeTab={activeTab}
+          availableModes={availableModes}
+          drawerOpen={drawerOpen}
+          progress={drawerProgress}
+          user={user}
+          userName={userName}
+          onClose={closeDrawer}
+          onLogout={logout}
+          onSelect={selectDrawerTab}
+          onSelectMode={setActiveMode}
+        />
       </View>
     </SafeAreaView>
-  );
-}
-
-function PointRow({ active, color, onPress, subtitle, title }) {
-  return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.pointRow, pressed ? styles.pressed : null]}>
-      <View style={styles.pointRail}>
-        <View style={[styles.pointDot, { backgroundColor: color }]} />
-        {title === "Origen" ? <View style={styles.pointLine} /> : null}
-      </View>
-      <View style={styles.pointCopy}>
-        <Text style={styles.pointTitle}>{title}</Text>
-        <Text style={styles.pointSubtitle}>{subtitle}</Text>
-      </View>
-      <ChevronRight color={active ? colors.primary : colors.text} size={iconSize(20)} strokeWidth={ICON_STROKE} />
-    </Pressable>
   );
 }
 
@@ -822,21 +829,333 @@ function SmallActionButton({ Icon, label, loading, muted = false, onPress }) {
   );
 }
 
-function BottomNavigation({ activeTab, onSelect }) {
+function passengerTitleFor(tab) {
+  if (tab === "trips") {
+    return "Mis viajes";
+  }
+
+  if (tab === "account") {
+    return "Cuenta";
+  }
+
+  return "Pasajero";
+}
+
+function PassengerHeader({ activeTab, onMenuPress }) {
   return (
-    <View style={styles.bottomNav}>
-      <BottomNavItem active={activeTab === "home"} Icon={House} label="Inicio" onPress={() => onSelect("home")} />
-      <BottomNavItem active={activeTab === "trips"} Icon={History} label="Mis viajes" onPress={() => onSelect("trips")} />
-      <BottomNavItem active={activeTab === "account"} Icon={User} label="Cuenta" onPress={() => onSelect("account")} />
+    <View style={styles.passengerHeaderBar}>
+      <Pressable
+        android_ripple={{ color: "rgba(15,157,138,0.12)" }}
+        onPress={onMenuPress}
+        style={({ pressed }) => [styles.passengerHeaderButton, pressed ? styles.pressed : null]}
+      >
+        <Menu color={colors.text} size={iconSize(28)} strokeWidth={ICON_STROKE} />
+      </Pressable>
+
+      <View style={styles.passengerHeaderCopy}>
+        <Text style={styles.passengerHeaderTitle}>{passengerTitleFor(activeTab)}</Text>
+        <Text style={styles.passengerHeaderSubtitle}>
+          {activeTab === "home" ? "A donde vamos hoy?" : "Gestiona tus viajes y cuenta"}
+        </Text>
+      </View>
+
+      <View style={styles.passengerHeaderAvatar}>
+        <User color={colors.primary} size={iconSize(23)} strokeWidth={ICON_STROKE} />
+      </View>
     </View>
   );
 }
 
-function BottomNavItem({ active = false, Icon, label, onPress }) {
+function MapFloatingButtons({ onCenter, onLocate }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.navItem, pressed ? styles.pressed : null]}>
-      <Icon color={active ? colors.primary : colors.muted} size={iconSize(22)} strokeWidth={ICON_STROKE} />
-      <Text style={[styles.navLabel, active ? styles.navLabelActive : null]}>{label}</Text>
+    <View style={styles.mapFloatingButtons}>
+      <Pressable
+        android_ripple={{ color: "rgba(15,157,138,0.12)", borderless: true }}
+        onPress={onLocate}
+        style={({ pressed }) => [styles.mapFloatingButton, pressed ? styles.pressedScale : null]}
+      >
+        <LocateFixed color="#0F9D8A" size={iconSize(24)} strokeWidth={ICON_STROKE} />
+      </Pressable>
+      <Pressable
+        android_ripple={{ color: "rgba(15,157,138,0.12)", borderless: true }}
+        onPress={onCenter}
+        style={({ pressed }) => [styles.mapFloatingButton, pressed ? styles.pressedScale : null]}
+      >
+        <Navigation color="#0F9D8A" size={iconSize(23)} strokeWidth={ICON_STROKE} />
+      </Pressable>
+    </View>
+  );
+}
+
+function BottomSheet({ children }) {
+  return (
+    <ScrollView style={styles.homeSheet} contentContainerStyle={styles.homeSheetContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.sheetHandle} />
+      {children}
+    </ScrollView>
+  );
+}
+
+function RideLocationCard({
+  destinationActive,
+  destinationSubtitle,
+  onDestinationPress,
+  onOriginPress,
+  originActive,
+  originSubtitle
+}) {
+  return (
+    <View style={styles.rideLocationCard}>
+      <View style={styles.locationRail}>
+        <View style={[styles.locationDot, styles.locationDotOrigin]} />
+        <View style={styles.locationLine} />
+        <View style={[styles.locationDot, styles.locationDotDestination]} />
+      </View>
+
+      <View style={styles.locationRows}>
+        <LocationChoiceRow active={originActive} onPress={onOriginPress} subtitle={originSubtitle} title="Origen" />
+        <View style={styles.locationSeparator} />
+        <LocationChoiceRow active={destinationActive} onPress={onDestinationPress} subtitle={destinationSubtitle} title="Destino" />
+      </View>
+    </View>
+  );
+}
+
+function LocationChoiceRow({ active, onPress, subtitle, title }) {
+  return (
+    <Pressable
+      android_ripple={{ color: "rgba(15,157,138,0.08)" }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.locationChoiceRow, pressed ? styles.pressed : null]}
+    >
+      <View style={styles.locationChoiceCopy}>
+        <Text style={[styles.locationChoiceTitle, active ? styles.locationChoiceTitleActive : null]}>{title}</Text>
+        <Text style={styles.locationChoiceSubtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      </View>
+      <ChevronRight color={active ? "#0F9D8A" : colors.text} size={iconSize(22)} strokeWidth={ICON_STROKE} />
+    </Pressable>
+  );
+}
+
+function FareCard({
+  distanceKm,
+  durationMin,
+  estimateData,
+  isEstimateLoading,
+  onRequest,
+  requestDisabled,
+  requestPending
+}) {
+  const total = estimateTotal(estimateData);
+  const fareValue = isEstimateLoading ? "Calculando..." : total ? formatMoney(total) : "Pendiente";
+
+  return (
+    <View style={styles.fareCard}>
+      <View style={styles.fareIconWrap}>
+        <CreditCard color="#FFFFFF" size={iconSize(25)} strokeWidth={ICON_STROKE} />
+      </View>
+      <View style={styles.fareCopy}>
+        <Text style={styles.fareLabel}>Tarifa estimada</Text>
+        <Text style={styles.fareValue}>{fareValue}</Text>
+        <Text style={styles.fareMeta}>
+          {isEstimateLoading ? "Calculando tarifa automaticamente" : total && distanceKm ? `${distanceKm.toFixed(1)} km` : "Elige origen y destino"}
+          {total && durationMin ? `  -  ${durationMin} min` : ""}
+        </Text>
+      </View>
+      <Pressable
+        android_ripple={{ color: "rgba(15,157,138,0.1)" }}
+        disabled={requestDisabled}
+        onPress={onRequest}
+        style={({ pressed }) => [
+          styles.fareButton,
+          pressed ? styles.pressedScale : null,
+          requestDisabled ? styles.disabled : null
+        ]}
+      >
+        {requestPending ? (
+          <ActivityIndicator color={colors.white} />
+        ) : (
+          <>
+            <Scooter color={colors.white} size={iconSize(18)} strokeWidth={ICON_STROKE} />
+            <Text style={styles.fareButtonText}>Solicitar viaje</Text>
+          </>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+function PassengerDrawer({
+  activeMode,
+  activeTab,
+  availableModes,
+  drawerOpen,
+  onClose,
+  onLogout,
+  onSelect,
+  onSelectMode,
+  progress,
+  user,
+  userName
+}) {
+  const overlayOpacity = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.36]
+  });
+  const translateX = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-360, 0]
+  });
+
+  function select(tab) {
+    onSelect(tab);
+  }
+
+  function logout() {
+    onClose();
+    onLogout();
+  }
+
+  return (
+    <View pointerEvents={drawerOpen ? "auto" : "none"} style={styles.drawerRoot}>
+      <Animated.View style={[styles.drawerOverlay, { opacity: overlayOpacity }]}>
+        <Pressable style={styles.drawerOverlayPressable} onPress={onClose} />
+      </Animated.View>
+
+      <Animated.View style={[styles.drawerPanel, { transform: [{ translateX }] }]}>
+        <PassengerDrawerHeader user={user} userName={userName} />
+
+        <View style={styles.drawerMenu}>
+          <PassengerDrawerItem active={activeTab === "home"} Icon={House} label="Inicio" onPress={() => select("home")} />
+          <PassengerDrawerItem active={activeTab === "trips"} Icon={History} label="Mis viajes" onPress={() => select("trips")} />
+          <PassengerDrawerItem active={activeTab === "account"} Icon={User} label="Cuenta" onPress={() => select("account")} />
+        </View>
+
+        <View style={styles.drawerFooter}>
+          {availableModes.length > 1 ? (
+            <PassengerWorkModeSelector
+              activeMode={activeMode}
+              availableModes={availableModes}
+              onSelectMode={onSelectMode}
+            />
+          ) : null}
+          <PassengerDrawerLogoutButton onPress={logout} />
+        </View>
+      </Animated.View>
+    </View>
+  );
+}
+
+function PassengerDrawerHeader({ user, userName }) {
+  return (
+    <View style={styles.drawerHeader}>
+      <View style={styles.drawerHeaderAccent} />
+      <View style={styles.drawerHeaderGlow} />
+
+      <Pressable
+        android_ripple={{ color: "rgba(255,255,255,0.16)" }}
+        onPress={() => {}}
+        style={({ pressed }) => [styles.drawerEditButton, pressed ? styles.pressed : null]}
+      >
+        <Camera color={colors.white} size={iconSize(19)} strokeWidth={ICON_STROKE} />
+      </Pressable>
+
+      <View style={styles.drawerHeaderContent}>
+        <View style={styles.drawerAvatarWrap}>
+          <View style={styles.drawerAvatar}>
+            <Text style={styles.drawerAvatarText}>{getInitials(user)}</Text>
+          </View>
+          <Pressable
+            android_ripple={{ color: "rgba(15,157,138,0.12)" }}
+            onPress={() => {}}
+            style={({ pressed }) => [styles.drawerAvatarCamera, pressed ? styles.pressed : null]}
+          >
+            <Camera color={colors.text} size={iconSize(16)} strokeWidth={ICON_STROKE} />
+          </Pressable>
+        </View>
+
+        <View style={styles.drawerHeaderCopy}>
+          <Text style={styles.drawerName} numberOfLines={2}>
+            {userName}
+          </Text>
+          <Text style={styles.drawerRole}>Pasajero</Text>
+          <View style={styles.drawerStatusRow}>
+            <View style={styles.drawerStatusDotActive} />
+            <Text style={styles.drawerStatusText}>Activo</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function PassengerDrawerItem({ active = false, Icon, label, onPress }) {
+  const iconColor = active ? "#0F9D8A" : colors.muted;
+
+  return (
+    <Pressable
+      android_ripple={{ color: active ? "rgba(15,157,138,0.14)" : "rgba(17,24,39,0.06)" }}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.drawerItem,
+        active ? styles.drawerItemActive : null,
+        pressed ? styles.pressed : null
+      ]}
+    >
+      <View style={[styles.drawerItemIcon, active ? styles.drawerItemIconActive : null]}>
+        <Icon color={iconColor} size={iconSize(23)} strokeWidth={ICON_STROKE} />
+      </View>
+      <Text style={[styles.drawerItemText, active ? styles.drawerItemTextActive : null]}>{label}</Text>
+      <ChevronRight color={active ? "#0F9D8A" : colors.muted} size={iconSize(20)} strokeWidth={ICON_STROKE} />
+    </Pressable>
+  );
+}
+
+function PassengerWorkModeSelector({ activeMode, availableModes, onSelectMode }) {
+  return (
+    <View style={styles.drawerModeCard}>
+      <Text style={styles.drawerModeTitle}>Modo de trabajo</Text>
+      <View style={styles.drawerModeOptions}>
+        {[AppModes.DRIVER, AppModes.PASSENGER]
+          .filter((mode) => availableModes.includes(mode))
+          .map((mode) => {
+            const isActive = activeMode === mode;
+            const Icon = mode === AppModes.DRIVER ? Scooter : User;
+
+            return (
+              <Pressable
+                android_ripple={{ color: isActive ? "rgba(255,255,255,0.18)" : "rgba(15,157,138,0.08)" }}
+                key={mode}
+                onPress={() => onSelectMode(mode)}
+                style={({ pressed }) => [
+                  styles.drawerModeOption,
+                  isActive ? styles.drawerModeOptionActive : null,
+                  pressed ? styles.pressed : null
+                ]}
+              >
+                <Icon color={isActive ? colors.white : colors.muted} size={iconSize(18)} strokeWidth={ICON_STROKE} />
+                <Text style={[styles.drawerModeOptionText, isActive ? styles.drawerModeOptionTextActive : null]}>
+                  {modeLabels[mode]}
+                </Text>
+              </Pressable>
+            );
+          })}
+      </View>
+    </View>
+  );
+}
+
+function PassengerDrawerLogoutButton({ onPress }) {
+  return (
+    <Pressable
+      android_ripple={{ color: "rgba(239,68,68,0.12)" }}
+      onPress={onPress}
+      style={({ pressed }) => [styles.drawerLogoutButton, pressed ? styles.pressed : null]}
+    >
+      <LogOut color="#EF4444" size={iconSize(22)} strokeWidth={ICON_STROKE} />
+      <Text style={styles.drawerLogoutText}>Cerrar sesion</Text>
     </Pressable>
   );
 }
@@ -854,39 +1173,359 @@ const styles = StyleSheet.create(compactStyles({
     flex: 1,
     backgroundColor: colors.background
   },
+  passengerHeaderBar: {
+    minHeight: 84,
+    backgroundColor: colors.white,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingTop: 8,
+    paddingBottom: 10,
+    shadowColor: colors.text,
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+    zIndex: 8
+  },
+  passengerHeaderButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  passengerHeaderCopy: {
+    flex: 1,
+    paddingHorizontal: 16
+  },
+  passengerHeaderTitle: {
+    color: colors.text,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: "900"
+  },
+  passengerHeaderSubtitle: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 4
+  },
+  passengerHeaderAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#E6F7F3",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  drawerRoot: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50
+  },
+  drawerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#000000"
+  },
+  drawerOverlayPressable: {
+    flex: 1
+  },
+  drawerPanel: {
+    width: "82%",
+    maxWidth: 560,
+    height: "100%",
+    backgroundColor: colors.white,
+    borderTopRightRadius: 37,
+    borderBottomRightRadius: 37,
+    shadowColor: colors.text,
+    shadowOpacity: 0.18,
+    shadowRadius: 32,
+    shadowOffset: { width: 12, height: 0 },
+    elevation: 14
+  },
+  drawerHeader: {
+    height: 240,
+    borderTopRightRadius: 37,
+    backgroundColor: "#0F766E",
+    overflow: "hidden",
+    justifyContent: "flex-end",
+    paddingHorizontal: 32,
+    paddingBottom: 28
+  },
+  drawerHeaderAccent: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: "62%",
+    backgroundColor: "#0F9D8A",
+    opacity: 0.62
+  },
+  drawerHeaderGlow: {
+    position: "absolute",
+    top: -82,
+    right: -52,
+    width: 230,
+    height: 230,
+    borderRadius: 115,
+    backgroundColor: "rgba(255,255,255,0.1)"
+  },
+  drawerHeaderContent: {
+    flexDirection: "row",
+    alignItems: "center"
+  },
+  drawerHeaderCopy: {
+    flex: 1,
+    paddingLeft: 22
+  },
+  drawerEditButton: {
+    position: "absolute",
+    top: 28,
+    right: 28,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2
+  },
+  drawerAvatarWrap: {
+    width: 112,
+    height: 112
+  },
+  drawerAvatar: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    borderWidth: 5,
+    borderColor: colors.white,
+    backgroundColor: "rgba(6,95,85,0.28)",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  drawerAvatarCamera: {
+    position: "absolute",
+    right: 2,
+    bottom: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: colors.text,
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4
+  },
+  drawerAvatarText: {
+    color: colors.white,
+    fontSize: 36,
+    fontWeight: "900"
+  },
+  drawerName: {
+    color: colors.white,
+    fontSize: 24,
+    lineHeight: 31,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+  drawerRole: {
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 17,
+    fontWeight: "800",
+    marginTop: 8
+  },
+  drawerStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 12
+  },
+  drawerStatusDotActive: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#10B981",
+    marginRight: 8
+  },
+  drawerStatusText: {
+    color: colors.white,
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  drawerMenu: {
+    flex: 1,
+    paddingHorizontal: 32,
+    paddingTop: 34
+  },
+  drawerFooter: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: 32,
+    paddingTop: 26,
+    paddingBottom: 26
+  },
+  drawerItem: {
+    minHeight: 72,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    marginBottom: 16,
+    backgroundColor: colors.white,
+    shadowColor: colors.text,
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 1
+  },
+  drawerItemActive: {
+    backgroundColor: "#E6F7F3",
+    borderColor: "#D8F2EB"
+  },
+  drawerItemIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 19,
+    backgroundColor: "#F8FAFC",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 18
+  },
+  drawerItemIconActive: {
+    backgroundColor: colors.white
+  },
+  drawerItemText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  drawerItemTextActive: {
+    color: "#0F9D8A"
+  },
+  drawerModeCard: {
+    marginBottom: 24
+  },
+  drawerModeTitle: {
+    color: colors.muted,
+    fontSize: 18,
+    fontWeight: "900",
+    marginBottom: 14
+  },
+  drawerModeOptions: {
+    flexDirection: "row",
+    borderRadius: 27,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.white,
+    padding: 4
+  },
+  drawerModeOption: {
+    flex: 1,
+    minHeight: 58,
+    borderRadius: 23,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8
+  },
+  drawerModeOptionActive: {
+    backgroundColor: "#0F9D8A",
+    borderColor: "#0F9D8A"
+  },
+  drawerModeOptionText: {
+    color: colors.muted,
+    fontSize: 15,
+    fontWeight: "900",
+    marginLeft: 8
+  },
+  drawerModeOptionTextActive: {
+    color: colors.white
+  },
+  drawerLogoutButton: {
+    minHeight: 68,
+    borderRadius: 21,
+    borderWidth: 1.4,
+    borderColor: "#FCA5A5",
+    backgroundColor: "#FEF2F2",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  drawerLogoutText: {
+    color: "#EF4444",
+    fontSize: 17,
+    fontWeight: "900",
+    marginLeft: 12
+  },
   homeScreen: {
     flex: 1,
     backgroundColor: colors.background
   },
+  passengerMapPanel: {
+    height: "60%",
+    minHeight: 420,
+    backgroundColor: "#E6F1EF",
+    overflow: "hidden"
+  },
   fullMap: {
     ...StyleSheet.absoluteFillObject
   },
-  homeSheet: {
+  mapFloatingButtons: {
     position: "absolute",
-    left: 12,
-    right: 12,
-    bottom: 12,
-    maxHeight: 430,
-    borderRadius: 22,
+    right: 22,
+    bottom: 58,
+    alignItems: "center"
+  },
+  mapFloatingButton: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 12,
     shadowColor: colors.text,
     shadowOpacity: 0.14,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 8
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6
+  },
+  homeSheet: {
+    flex: 1,
+    marginTop: -46,
+    borderTopLeftRadius: 44,
+    borderTopRightRadius: 44,
+    backgroundColor: colors.white,
+    shadowColor: colors.text,
+    shadowOpacity: 0.12,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: -10 },
+    elevation: 10
   },
   homeSheetContent: {
-    padding: 12
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 30
   },
   sheetHandle: {
-    width: 42,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
+    width: 54,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "#D1D5DB",
     alignSelf: "center",
-    marginBottom: 10
+    marginBottom: 22
   },
   screen: {
     flex: 1,
@@ -1024,9 +1663,9 @@ const styles = StyleSheet.create(compactStyles({
     ...StyleSheet.absoluteFillObject
   },
   currentMarkerHalo: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 74,
+    height: 74,
+    borderRadius: 37,
     backgroundColor: "rgba(37,99,235,0.13)",
     alignItems: "center",
     justifyContent: "center"
@@ -1059,7 +1698,7 @@ const styles = StyleSheet.create(compactStyles({
     elevation: 4
   },
   routeCard: {
-    borderRadius: 18,
+    borderRadius: 24,
     backgroundColor: colors.white,
     paddingHorizontal: 16,
     paddingVertical: 6,
@@ -1070,6 +1709,80 @@ const styles = StyleSheet.create(compactStyles({
     shadowRadius: 15,
     shadowOffset: { width: 0, height: 8 },
     elevation: 4
+  },
+  rideLocationCard: {
+    borderRadius: 28,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: "#EEF2F7",
+    flexDirection: "row",
+    paddingVertical: 18,
+    paddingLeft: 20,
+    paddingRight: 12,
+    shadowColor: colors.text,
+    shadowOpacity: 0.08,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 5
+  },
+  locationRail: {
+    width: 26,
+    alignItems: "center",
+    paddingTop: 21,
+    paddingBottom: 21
+  },
+  locationDot: {
+    width: 13,
+    height: 13,
+    borderRadius: 7
+  },
+  locationDotOrigin: {
+    backgroundColor: colors.danger
+  },
+  locationDotDestination: {
+    backgroundColor: colors.primary
+  },
+  locationLine: {
+    width: 1,
+    flex: 1,
+    minHeight: 42,
+    backgroundColor: "#CBD5E1",
+    marginVertical: 6
+  },
+  locationRows: {
+    flex: 1
+  },
+  locationChoiceRow: {
+    minHeight: 72,
+    borderRadius: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingLeft: 14,
+    paddingRight: 8
+  },
+  locationChoiceCopy: {
+    flex: 1,
+    paddingRight: 10
+  },
+  locationChoiceTitle: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: "900"
+  },
+  locationChoiceTitleActive: {
+    color: colors.primary
+  },
+  locationChoiceSubtitle: {
+    color: colors.muted,
+    fontSize: 16,
+    lineHeight: 22,
+    marginTop: 6
+  },
+  locationSeparator: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginLeft: 14,
+    marginRight: 18
   },
   pointRow: {
     minHeight: 62,
@@ -1113,69 +1826,90 @@ const styles = StyleSheet.create(compactStyles({
     marginLeft: 32
   },
   fareCard: {
-    marginTop: 16,
-    borderRadius: 18,
-    backgroundColor: "#EAF8F5",
-    padding: 14,
+    marginTop: 22,
+    borderRadius: 28,
+    backgroundColor: "#F0FDFA",
+    padding: 18,
     flexDirection: "row",
-    alignItems: "center"
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#DDFBF4"
   },
   fareIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12
+    marginRight: 18,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.24,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4
   },
   fareCopy: {
     flex: 1,
-    paddingRight: 10
+    paddingRight: 12
   },
   fareLabel: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: "800"
   },
   fareValue: {
     color: colors.text,
-    fontSize: 17,
+    fontSize: 25,
+    lineHeight: 31,
     fontWeight: "900",
-    marginTop: 4
+    marginTop: 5
   },
   fareMeta: {
     color: colors.muted,
-    fontSize: 12,
-    marginTop: 3
+    fontSize: 15,
+    lineHeight: 21,
+    marginTop: 4
   },
   fareButton: {
-    minHeight: 44,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 14
-  },
-  fareButtonText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: "900"
-  },
-  primaryButton: {
     minHeight: 52,
-    borderRadius: 13,
-    marginTop: 14,
+    borderRadius: 17,
     backgroundColor: colors.primary,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center"
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 3
+  },
+  fareButtonText: {
+    color: colors.white,
+    fontSize: 15,
+    fontWeight: "900",
+    marginLeft: 7
+  },
+  primaryButton: {
+    minHeight: 72,
+    borderRadius: 24,
+    marginTop: 24,
+    backgroundColor: colors.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: colors.primary,
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 5
   },
   primaryButtonText: {
     color: colors.white,
-    fontSize: 17,
+    fontSize: 21,
     fontWeight: "900",
-    marginLeft: 10
+    marginLeft: 12
   },
   tripCard: {
     marginTop: 16,
@@ -1611,6 +2345,10 @@ const styles = StyleSheet.create(compactStyles({
   },
   pressed: {
     opacity: 0.86
+  },
+  pressedScale: {
+    opacity: 0.9,
+    transform: [{ scale: 0.98 }]
   },
   disabled: {
     opacity: 0.55

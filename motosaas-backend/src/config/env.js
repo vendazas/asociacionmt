@@ -11,6 +11,8 @@ const env = {
   corsOrigin: process.env.CORS_ORIGIN || "http://localhost:5173",
   swaggerServerUrl: process.env.SWAGGER_SERVER_URL || "http://localhost:4007",
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
+  realtimeServiceUrl: process.env.REALTIME_SERVICE_URL || "",
+  realtimeApiSecret: process.env.REALTIME_API_SECRET || "",
   logLevel: process.env.LOG_LEVEL || "info",
   logToFile: process.env.LOG_TO_FILE !== "false",
   syncDatabaseOnStart: process.env.SYNC_DATABASE_ON_START !== "false"

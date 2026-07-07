@@ -4,6 +4,7 @@ const { ApiError } = require("../utils/apiError");
 const { haversineKm, toNumber } = require("../utils/geo");
 const { serializeTrip, serializeZone } = require("../utils/serializers");
 const fareService = require("./fare.service");
+const realtimeService = require("./realtime.service");
 
 const TripStatuses = Object.freeze({
   REQUESTED: "REQUESTED",
@@ -301,7 +302,12 @@ async function requestTrip(user, payload) {
     return searchingTrip;
   });
 
-  return serializedTrip(trip);
+  const data = serializedTrip(trip);
+  realtimeService.publishTripEvent("viaje_solicitado", data, {
+    availableDriverCount: availableDrivers.length
+  });
+
+  return data;
 }
 
 async function assertAvailableDriver(user) {
@@ -387,7 +393,11 @@ async function acceptTrip(user, tripId) {
     return updatedTrip;
   });
 
-  return serializedTrip(trip);
+  const data = serializedTrip(trip);
+  realtimeService.publishTripEvent("viaje_aceptado", data);
+  realtimeService.publishTripEvent("conductor_asignado", data);
+
+  return data;
 }
 
 async function rejectTrip(user, tripId, payload = {}) {
@@ -451,7 +461,13 @@ async function rejectTrip(user, tripId, payload = {}) {
     return updatedTrip;
   });
 
-  return serializedTrip(trip);
+  const data = serializedTrip(trip);
+  realtimeService.publishTripEvent("viaje_actualizado", data, {
+    reason: "driver_rejected",
+    driverId: user.id
+  });
+
+  return data;
 }
 
 async function arrivedTrip(user, tripId) {
@@ -497,7 +513,12 @@ async function arrivedTrip(user, tripId) {
     return updatedTrip;
   });
 
-  return serializedTrip(trip);
+  const data = serializedTrip(trip);
+  realtimeService.publishTripEvent("viaje_actualizado", data, {
+    reason: "driver_arriving"
+  });
+
+  return data;
 }
 
 async function startTrip(user, tripId) {
@@ -536,7 +557,10 @@ async function startTrip(user, tripId) {
     return updatedTrip;
   });
 
-  return serializedTrip(trip);
+  const data = serializedTrip(trip);
+  realtimeService.publishTripEvent("viaje_iniciado", data);
+
+  return data;
 }
 
 async function finishTrip(user, tripId, payload = {}) {
@@ -619,7 +643,10 @@ async function finishTrip(user, tripId, payload = {}) {
     return updatedTrip;
   });
 
-  return serializedTrip(trip);
+  const data = serializedTrip(trip);
+  realtimeService.publishTripEvent("viaje_finalizado", data);
+
+  return data;
 }
 
 async function cancelTrip(user, tripId, payload = {}) {
@@ -673,7 +700,10 @@ async function cancelTrip(user, tripId, payload = {}) {
     return updatedTrip;
   });
 
-  return serializedTrip(trip);
+  const data = serializedTrip(trip);
+  realtimeService.publishTripEvent("viaje_cancelado", data);
+
+  return data;
 }
 
 async function getTripStatus(user, tripId) {

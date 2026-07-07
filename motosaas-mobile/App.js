@@ -1,6 +1,7 @@
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "./src/providers/AuthProvider";
+import { RealtimeProvider } from "./src/providers/RealtimeProvider";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { LoginScreen } from "./src/screens/LoginScreen";
 
@@ -25,7 +26,9 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <RootScreen />
+        <RealtimeProvider>
+          <RootScreen />
+        </RealtimeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

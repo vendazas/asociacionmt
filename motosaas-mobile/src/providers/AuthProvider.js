@@ -88,6 +88,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (credentials) => {
+    console.log('credentials: ', credentials)
     const data = await loginRequest(credentials);
     console.log('data: ', data)
     await saveAccessToken(data.accessToken);

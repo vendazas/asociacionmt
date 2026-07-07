@@ -2,6 +2,7 @@ import { apiClient } from "../../api/client";
 
 export async function login(credentials) {
   const response = await apiClient.post("/auth/login", credentials);
+  console.log('response: ', response)
   return response.data.data;
 }
 
